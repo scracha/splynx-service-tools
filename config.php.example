@@ -1,0 +1,60 @@
+<?php
+// --- Splynx API Configuration ---
+
+// Replace with your Splynx API base URL
+$splynxBaseUrl = 'https://your-splynx-instance.example.com/api/2.0';
+
+// --- Splynx Admin URL ---
+$splynxAdminUrL = 'https://your-splynx-instance.example.com';
+
+// The base URL for the Splynx Customer/Admin portal
+$splynxCustomerURL = 'https://your-splynx-instance.example.com';
+
+// --- Dashboard Configuration ---
+$dashboardTitle = 'NOC Dispatch';
+
+// Replace with your Splynx API Key
+$apiKey = 'your_splynx_api_key';
+
+// Replace with your Splynx API Secret
+$apiSecret = 'your_splynx_api_secret';
+
+// OpenAI API key (for transcription features)
+$openAPIkey = 'sk-your-openai-api-key';
+
+// Google AI Studio key
+$googleAIStudioKey = 'your_google_ai_studio_key';
+
+// Google Maps API key (for geocoding fallback)
+$googleApiKey = 'your_google_maps_api_key';
+
+// --- Geocoding Region Bias ---
+// ISO 3166-1 alpha-2 country code to bias geocoding results (e.g. 'nz', 'au', 'us')
+$geocodeRegion = 'nz';
+
+// --- Default Map Location & Geo Boundary ---
+// Markers outside the bounding box are relocated here (e.g. bad GPS data from Splynx)
+$defaultLat = -41.2924;  // Wellington, NZ
+$defaultLng = 174.7787;
+
+// Bounding box for New Zealand — anything outside gets clamped to the default
+$geoBoundary = [
+    'lat_min' => -47.5,   // south
+    'lat_max' => -34.0,   // north
+    'lng_min' => 165.0,   // west
+    'lng_max' => 179.0,   // east
+];
+
+// --- Additional Customer Attributes Configuration ---
+const CUSTOM_ATTRIBUTES = [
+    '2ndcontactname'  => 'contact_2_name',
+    '2ndcontactphone' => 'contact_2_phone'
+];
+
+// --- Daemon/Service Settings ---
+const UPDATE_TIME_HOUR = 1;
+
+// Path to the shared memory file (fast, in-memory access)
+const DATA_STORE_PATH = '/dev/shm/splynx_active_services.json';
+
+?>
