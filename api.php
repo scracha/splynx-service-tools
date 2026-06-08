@@ -87,6 +87,44 @@ if (isset($filteredServices[$targetIp])) {
     http_response_code(200);
     $response = $filteredServices[$targetIp];
     $response['last_updated'] = $lastUpdated;
+
+    // --- 5b. Attach open tickets & tasks for this customer (active services only) ---
+    $serviceStatus = strtolower($response['service_status'] ?? '');
+    $customerId = $response['customer_id'] ?? null;
+
+    if ($customerId && $serviceStatus === 'active') {
+        // Tickets
+        $ticketStorePath = '/dev/shm/splynx_open_tickets.json';
+        if (file_exists($ticketStorePath)) {
+            $allTickets = json_decode(file_get_contents($ticketStorePath), true) ?? [];
+            $custTickets = array_values(array_filter($allTickets, fn($t) => ($t['customer_id'] ?? null) == $customerId));
+            // Sort newest first by created_at
+            usort($custTickets, function($a, $b) {
+                return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
+            });
+            $response['open_tickets'] = $custTickets;
+        } else {
+            $response['open_tickets'] = [];
+        }
+
+        // Tasks
+        $taskStorePath = '/dev/shm/splynx_open_tasks.json';
+        if (file_exists($taskStorePath)) {
+            $allTasks = json_decode(file_get_contents($taskStorePath), true) ?? [];
+            $custTasks = array_values(array_filter($allTasks, fn($t) => ($t['related_customer_id'] ?? null) == $customerId));
+            // Sort newest first by created_at
+            usort($custTasks, function($a, $b) {
+                return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
+            });
+            $response['open_tasks'] = $custTasks;
+        } else {
+            $response['open_tasks'] = [];
+        }
+    } else {
+        $response['open_tickets'] = [];
+        $response['open_tasks'] = [];
+    }
+
     echo json_encode($response);
 } else {
     http_response_code(404);

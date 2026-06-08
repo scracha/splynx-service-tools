@@ -87,8 +87,8 @@ class SplynxApiClient
     }
 }
 
-// Parse command line arguments for the end date
-$options = getopt('', ['end:']);
+// Parse command line arguments
+$options = getopt('', ['end:', 'limit:']);
 
 $endDate = null;
 if (isset($options['end'])) {
@@ -105,13 +105,29 @@ if (isset($options['end'])) {
     $endDate = new DateTime('yesterday');
 }
 
+$customerLimit = isset($options['limit']) ? (int)$options['limit'] : null;
+
 // Define the name of the output CSV file with the end date appended
 $csvFileName = 'splynx_customers_traffic_data_' . $endDate->format('Y-m-d') . '.csv';
+
+echo "Splynx Whole Month Traffic Report\n";
+echo "End date: " . $endDate->format('Y-m-d') . "\n";
+if ($customerLimit) {
+    echo "Customer limit: {$customerLimit}\n";
+}
+echo "\n";
 
 $splynx = new SplynxApiClient($splynxBaseUrl, $apiKey, $apiSecret);
 
 // Fetch all customers, without filtering by status
 $customers = $splynx->get('admin/customers/customer');
+
+if ($customers !== null && !empty($customers)) {
+    if ($customerLimit) {
+        $customers = array_slice($customers, 0, $customerLimit);
+    }
+    echo "Processing " . count($customers) . " customer(s)...\n\n";
+} 
 
 // Open the CSV file for writing
 $csvFile = fopen($csvFileName, 'w');
@@ -137,6 +153,8 @@ if ($customers !== null) {
         
         foreach ($customers as $customer) {
             if (isset($customer['id'])) {
+                $customersProcessed++;
+                echo "  [{$customersProcessed}/{$totalCustomers}] Customer #{$customer['id']}: " . ($customer['name'] ?? 'Unknown') . "\n";
                 $serviceEndpoint = 'admin/customers/customer/' . $customer['id'] . '/internet-services';
                 $internetServices = $splynx->get($serviceEndpoint);
 
@@ -241,24 +259,23 @@ if ($customers !== null) {
                                 $totalUploadBytes = 0;
                                 $totalDownloadBytes = 0;
                                 
-                                // To bypass the API's date filtering issues, we fetch all traffic data
-                                // for the service and then manually filter it.
+                                // Use API BETWEEN date filter to only fetch relevant traffic data
                                 $trafficParams = [
                                     'main_attributes' => [
-                                        'service_id' => $service['id']
+                                        'service_id' => $service['id'],
+                                        'date' => ['BETWEEN', $statsPeriodStart->format('Y-m-d'), $statsPeriodEnd->format('Y-m-d')],
                                     ]
                                 ];
                                 $trafficCounters = $splynx->get('admin/customers/customer-traffic-counter', $trafficParams);
                                 
                                 if ($trafficCounters !== null && !empty($trafficCounters)) {
                                     foreach ($trafficCounters as $counter) {
-                                        // Manually check if the counter's date is within the desired range
-                                        $counterDate = new DateTime($counter['date']);
-                                        if ($counterDate >= $statsPeriodStart && $counterDate <= $statsPeriodEnd) {
-                                            $totalUploadBytes += $counter['up'] ?? 0;
-                                            $totalDownloadBytes += $counter['down'] ?? 0;
-                                        }
+                                        $totalUploadBytes += $counter['up'] ?? 0;
+                                        $totalDownloadBytes += $counter['down'] ?? 0;
                                     }
+                                    echo "    Service #{$service['id']}: " . count($trafficCounters) . " counters for period " . $statsPeriodStart->format('Y-m-d') . " to " . $statsPeriodEnd->format('Y-m-d') . "\n";
+                                } else {
+                                    echo "    Service #{$service['id']}: No traffic data for period\n";
                                 }
 
                                 // Convert bytes to gigabytes and format to 2 decimal places

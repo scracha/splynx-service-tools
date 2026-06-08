@@ -53,10 +53,36 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
         .responsive-table td {
              padding-left: 0.5rem;
              padding-right: 0.5rem;
-             white-space: nowrap; /* Keep cell content compact */
-             overflow: hidden;
-             text-overflow: ellipsis;
+             white-space: normal; /* Allow cell content to wrap */
+             word-break: break-word;
+             max-width: 180px;
+             vertical-align: top;
         }
+        .responsive-table {
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        /* Ticket/Task symbol styling */
+        .tt-symbol {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-right: 2px;
+            cursor: pointer;
+        }
+        .tt-ticket { background-color: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+        .tt-ticket:hover { background-color: #bfdbfe; }
+        .tt-task { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .tt-task:hover { background-color: #bbf7d0; }
+        .tt-more { background-color: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; }
+        .tt-more:hover { background-color: #e5e7eb; }
 
         @media (max-width: 768px) {
             .hide-on-mobile {
@@ -89,6 +115,10 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
                         <div class="flex items-center">
                             <input id="include-blocked" type="checkbox" checked class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                             <label for="include-blocked" class="ml-2 block text-sm text-gray-900">Include Blocked Customers</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="expand-tickets-tasks" type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                            <label for="expand-tickets-tasks" class="ml-2 block text-sm text-gray-900">Expand Tickets/Tasks</label>
                         </div>
                     </div>
                 </div>
@@ -170,10 +200,11 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
         const loadingSpinner = document.getElementById('loading-spinner');
         const includeStoppedCheckbox = document.getElementById('include-stopped');
         const includeBlockedCheckbox = document.getElementById('include-blocked');
+        const expandTicketsTasksCheckbox = document.getElementById('expand-tickets-tasks');
         
         // --- Column Configuration (Master list for table and export) ---
         const COLUMNS_CONFIG = [
-            // Core Data (Reordered)
+            // Core Data
             { key: 'service_ipv4', label: 'IP', isVisible: true, isMobileHidden: false },
             { key: 'service_id', label: 'Service ID', isVisible: true, isMobileHidden: false },
             { key: 'customer_name', label: 'Customer', isVisible: true, isMobileHidden: false },
@@ -182,13 +213,15 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
             // Contact Info
             { key: 'customer_phone', label: 'Phone', isVisible: true, isMobileHidden: true },
             { key: 'customer_email', label: 'Email', isVisible: true, isMobileHidden: true },
-            // Status (Conditional & Reordered)
+            // Tickets/Tasks compact column (always shown after Email)
+            { key: '_tickets_tasks', label: 'T/T', isVisible: true, isMobileHidden: true, isCustomRender: true },
+            // Status (Conditional)
             { key: 'customer_status', label: 'Customer Status', isVisible: false, isConditional: 'blocked', isMobileHidden: false }, 
             { key: 'service_status', label: 'Service Status', isVisible: false, isConditional: 'stopped', isMobileHidden: false }, 
-            // Contact 2 (Renamed)
+            // Contact 2
             { key: 'contact_2_name', label: 'Contact 2', isVisible: true, isMobileHidden: true },
             { key: 'contact_2_phone', label: 'Phone 2', isVisible: true, isMobileHidden: true },            
-            // Map Data (Split and visible)
+            // Map Data
             { key: 'service_latitude', label: 'Latitude', isVisible: true, isMobileHidden: true },
             { key: 'service_longitude', label: 'Longitude', isVisible: true, isMobileHidden: true },
         ];
@@ -201,6 +234,9 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
             const isStoppedChecked = includeStoppedCheckbox.checked;
 
             return COLUMNS_CONFIG.filter(col => {
+                // Custom render columns (like T/T) are excluded from CSV export
+                if (forCsv && col.isCustomRender) return false;
+
                 // Conditional columns: only show if the filter is active
                 if (col.isConditional === 'blocked' && !isBlockedChecked) return false;
                 if (col.isConditional === 'stopped' && !isStoppedChecked) return false;
@@ -359,6 +395,7 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
          */
         const renderTable = (results) => {
             const visibleColumns = getVisibleColumns(false); // Get columns for HTML table
+            const isExpanded = expandTicketsTasksCheckbox.checked;
             
             resultsCountSpan.textContent = results.length;
             resultsTableHead.innerHTML = '';
@@ -371,10 +408,18 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
 
             // 1. Create Header Row
             const headerRow = document.createElement('tr');
-            headerRow.innerHTML = visibleColumns.map(col => {
+            let headerHtml = visibleColumns.map(col => {
                 const mobileClass = col.isMobileHidden ? 'hide-on-mobile' : '';
                 return `<th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${mobileClass}">${col.label}</th>`;
             }).join('');
+            
+            // Add expanded columns if checkbox is checked
+            if (isExpanded) {
+                headerHtml += `<th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hide-on-mobile">Ticket/Task 1</th>`;
+                headerHtml += `<th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hide-on-mobile">Ticket/Task 2</th>`;
+            }
+            
+            headerRow.innerHTML = headerHtml;
             resultsTableHead.appendChild(headerRow);
             
             // 2. Create Body Rows
@@ -402,11 +447,17 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
                     }
                 };
 
-                row.innerHTML = visibleColumns.map(col => {
+                let rowHtml = visibleColumns.map(col => {
+                    const mobileClass = col.isMobileHidden ? 'hide-on-mobile' : '';
+
+                    // Custom render: Tickets/Tasks compact symbols
+                    if (col.isCustomRender && col.key === '_tickets_tasks') {
+                        return renderTicketTaskSymbols(result);
+                    }
+
                     let cellValue = result[col.key] || 'N/A';
                     let cellClass = '';
-                    const mobileClass = col.isMobileHidden ? 'hide-on-mobile' : '';
-                    let cellContent = cellValue; // Holds the final HTML/text content
+                    let cellContent = cellValue;
 
                     // Handle latitude/longitude to show 4 decimal places if present
                     if (col.key === 'service_latitude' || col.key === 'service_longitude') {
@@ -439,8 +490,92 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
                             </td>`;
                 }).join('');
 
+                // --- Expanded columns ---
+                if (isExpanded) {
+                    rowHtml += renderExpandedTicketTaskCells(result);
+                }
+
+                row.innerHTML = rowHtml;
                 resultsTableBody.appendChild(row);
             });
+        };
+
+        /**
+         * Combines tickets and tasks into a sorted list (newest first) for a result.
+         */
+        const getCombinedTicketsTasks = (result) => {
+            const tickets = (result.open_tickets || []).map(t => ({
+                type: 'ticket',
+                id: t.ticket_id,
+                subject: t.subject || 'No Subject',
+                created_at: t.created_at || '',
+                url: `${SPLYX_ADMIN_URL}/admin/tickets/opened--view?id=${t.ticket_id}`
+            }));
+            const tasks = (result.open_tasks || []).map(t => ({
+                type: 'task',
+                id: t.task_id,
+                subject: t.title || 'Untitled Task',
+                created_at: t.created_at || '',
+                url: `${SPLYX_ADMIN_URL}/admin/scheduling/tasks--view?id=${t.task_id}`
+            }));
+            // Merge and sort newest first
+            return [...tickets, ...tasks].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        };
+
+        /**
+         * Renders the compact T/T symbol cell for a result row.
+         * Shows up to 2 symbols (ticket=T, task=K) with mouseover for subject.
+         * If more exist, shows a "…" symbol linking to the customer record.
+         */
+        const renderTicketTaskSymbols = (result) => {
+            const items = getCombinedTicketsTasks(result);
+            
+            if (items.length === 0) {
+                return `<td class="px-3 py-3 text-sm text-gray-400 hide-on-mobile">—</td>`;
+            }
+
+            let symbols = '';
+            const showCount = Math.min(items.length, 2);
+            
+            for (let i = 0; i < showCount; i++) {
+                const item = items[i];
+                const label = item.type === 'ticket' ? 'T' : 'K';
+                const cssClass = item.type === 'ticket' ? 'tt-ticket' : 'tt-task';
+                const safeSubject = item.subject.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                symbols += `<a href="${item.url}" target="_blank" class="tt-symbol ${cssClass}" title="${safeSubject}">${label}</a>`;
+            }
+            
+            // "More" indicator if there are more than 2
+            if (items.length > 2) {
+                const customerUrl = `${SPLYX_ADMIN_URL}/admin/customers/view?id=${result.customer_id}`;
+                symbols += `<a href="${customerUrl}" target="_blank" class="tt-symbol tt-more" title="${items.length - 2} more tickets/tasks">&hellip;</a>`;
+            }
+
+            return `<td class="px-3 py-3 text-sm hide-on-mobile">${symbols}</td>`;
+        };
+
+        /**
+         * Renders the expanded Ticket/Task 1 and Ticket/Task 2 cells.
+         * Each cell shows the subject as a hyperlink to the ticket/task.
+         */
+        const renderExpandedTicketTaskCells = (result) => {
+            const items = getCombinedTicketsTasks(result);
+            let cells = '';
+            
+            for (let i = 0; i < 2; i++) {
+                if (items[i]) {
+                    const item = items[i];
+                    const typeLabel = item.type === 'ticket' ? '🎫' : '📋';
+                    const safeSubject = item.subject.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    cells += `<td class="px-3 py-3 text-sm text-gray-900 hide-on-mobile" style="white-space:normal; max-width:200px;">
+                        ${typeLabel} <a href="${item.url}" target="_blank" class="text-blue-600 hover:text-blue-800">${safeSubject}</a>
+                    </td>`;
+                } else {
+                    cells += `<td class="px-3 py-3 text-sm text-gray-400 hide-on-mobile">—</td>`;
+                }
+            }
+            
+            return cells;
         };
 
 
@@ -974,6 +1109,13 @@ $splynxAdminUrl = $splynxAdminUrL ?? '';
             // Re-run lookup and rendering when filters change
             includeStoppedCheckbox.addEventListener('change', processIps);
             includeBlockedCheckbox.addEventListener('change', processIps);
+            
+            // Re-render table when expand tickets/tasks is toggled (no re-fetch needed)
+            expandTicketsTasksCheckbox.addEventListener('change', () => {
+                if (lookupResults.length > 0) {
+                    renderTable(lookupResults);
+                }
+            });
             
             // Update IP count dynamically
             ipListTextarea.addEventListener('input', () => {
